@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Raiku Quiz</title>
+  <style>
+    :root{
+      --bg:#0b0f14; --card:#121922; --muted:#9bb0c6; --accent:#00e0b8; --accent2:#4fe3ff;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family:system-ui,Segoe UI,Roboto,Inter,Arial,sans-serif;
+      background: radial-gradient(1200px 700px at 20% -10%, #0f2130 0, transparent 60%) no-repeat,
+                  radial-gradient(1200px 700px at 120% -10%, #061a26 0, transparent 60%) no-repeat,
+                  var(--bg); color:#e8f1fb; min-height:100vh; display:grid; place-items:center; padding:24px;
+    }
+    .card{
+      width:min(820px, 95vw); background:linear-gradient(180deg, rgba(255,255,255,.05), transparent 40%) , var(--card);
+      border:1px solid rgba(255,255,255,.08); border-radius:24px; padding:28px; box-shadow:0 10px 40px rgba(0,0,0,.35);
+      backdrop-filter: blur(6px);
+    }
+    .logo{
+      display:flex; align-items:center; gap:14px; margin-bottom:14px;
+    }
+    .logo img{ width:50px; height:50px; border-radius:12px; border:1px solid rgba(255,255,255,.12) }
+    .logo h1{ margin:0; font-size:22px; letter-spacing:.5px }
+    .muted{ color:var(--muted) }
+    .center{ text-align:center }
+
+    button{
+      cursor:pointer; border:0; padding:14px 18px; border-radius:14px; font-weight:600; font-size:16px;
+      background:linear-gradient(90deg, var(--accent), var(--accent2)); color:#00262a;
+      box-shadow:0 8px 22px rgba(0, 224, 184, .25); transition: transform .08s ease, filter .2s ease;
+    }
+    button:hover{ filter:brightness(1.05) }
+    button:active{ transform: translateY(1px) }
+    .btn-ghost{
+      background:transparent; color:#cfe9ff; border:1px solid rgba(255,255,255,.14); box-shadow:none;
+    }
+
+    .screen{ display:none; }
+    .screen.active{ display:block; }
+
+    .q-box{
+      margin-top:18px; background:#0e1620; border:1px solid rgba(255,255,255,.06);
+      border-radius:16px; padding:18px;
+    }
+    .q-title{ font-size:18px; margin:0 0 10px }
+    .options{ display:grid; gap:10px; margin-top:10px }
+    .opt{
+      display:flex; gap:10px; align-items:flex-start; padding:12px; border-radius:12px; background:#0c141d; border:1px solid rgba(255,255,255,.08)
+    }
+    .opt input{ margin-top:3px; transform: scale(1.15) }
+    .step{ color:var(--muted); font-size:14px; margin-bottom:6px }
+    .footer{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:18px }
+    .answers{ margin-top:16px }
+    .answers li{ margin:6px 0 }
+    .score{
+      font-size:20px; font-weight:700; background:linear-gradient(90deg,var(--accent),var(--accent2)); -webkit-background-clip:text; background-clip:text; color:transparent;
+    }
+
+    @media (max-width:520px){
+      .footer{ flex-direction:column; align-items:stretch }
+      button{ width:100% }
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <!-- Header -->
+    <div class="logo">
+      <img src="logo.png" alt="Raiku logo" />
+      <h1>Raiku Quiz</h1>
+    </div>
+    <p class="muted">Test what you know about Raiku on Solana.</p>
+
+    <!-- START SCREEN -->
+    <section id="start" class="screen active center">
+      <div class="q-box">
+        <p class="muted">Click below to begin. 4 questions, instant results & correct answers at the end.</p>
+        <button id="startBtn">Start Quiz</button>
+      </div>
+    </section>
+
+    <!-- QUIZ SCREEN -->
+    <section id="quiz" class="screen">
+      <div class="step" id="step">Question 1 of 4</div>
+      <div class="q-box">
+        <h2 id="qTitle" class="q-title"></h2>
+        <form id="form" class="options"></form>
+      </div>
+      <div class="footer">
+        <button class="btn-ghost" id="backBtn" type="button">Back</button>
+        <button id="nextBtn" type="button">Next</button>
+      </div>
+    </section>
+
+    <!-- RESULT SCREEN -->
+    <section id="result" class="screen center">
+      <div class="q-box">
+        <p class="score" id="scoreText"></p>
+        <p class="muted" id="summary"></p>
+        <div id="correctionsWrap" hidden>
+          <h3>Correct answers for your mistakes:</h3>
+          <ol id="corrections" class="answers"></ol>
+        </div>
+        <button id="restartBtn">Restart</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const QUESTIONS = [
+      {
+        q: "Which blockchain is Raiku primarily focused on?",
+        options: ["Ethereum", "Solana", "Polygon", "Avalanche"],
+        answer: 1
+      },
+      {
+        q: "What does Raiku’s Coordination Engine provide?",
+        options: ["Token minting", "Slot auctions & transaction scheduling", "Wallet creation", "NFT marketplace"],
+        answer: 1
+      },
+      {
+        q: "What is one key benefit Raiku provides for Solana users?",
+        options: [
+          "Guaranteed transaction inclusion even under network stress",
+          "Free token airdrops",
+          "Unlimited storage for NFTs",
+          "Built-in social networking"
+        ],
+        answer: 0
+      },
+      {
+        q: "Which of the following is a use case of Raiku?",
+        options: ["AI / On-chain agents", "Healthcare records", "Weather prediction", "Social media feed"],
+        answer: 0
+      }
+    ];
+
+    let idx = 0;
+    const userAnswers = new Array(QUESTIONS.length).fill(null);
+
+    const screens = {
+      start: document.getElementById("start"),
+      quiz: document.getElementById("quiz"),
+      result: document.getElementById("result"),
+    };
+    const stepEl = document.getElementById("step");
+    const qTitle = document.getElementById("qTitle");
+    const form = document.getElementById("form");
+    const backBtn = document.getElementById("backBtn");
+    const nextBtn = document.getElementById("nextBtn");
+
+    document.getElementById("startBtn").addEventListener("click", start);
+    backBtn.addEventListener("click", ()=> { if(idx>0){ idx--; renderQuestion(); } else go("start"); });
+    nextBtn.addEventListener("click", onNext);
+    document.getElementById("restartBtn").addEventListener("click", ()=>{ reset(); start(); });
+
+    function go(name){
+      Object.values(screens).forEach(s=>s.classList.remove("active"));
+      screens[name].classList.add("active");
+    }
+
+    function start(){
+      idx = 0;
+      go("quiz");
+      renderQuestion();
+    }
+
+    function reset(){
+      for(let i=0;i<userAnswers.length;i++) userAnswers[i]=null;
+      idx=0;
+    }
+
+    function renderQuestion(){
+      const total = QUESTIONS.length;
+      const { q, options } = QUESTIONS[idx];
+      stepEl.textContent = `Question ${idx+1} of ${total}`;
+      qTitle.textContent = q;
+
+      form.innerHTML = "";
+      options.forEach((opt, i)=>{
+        const id = `opt-${idx}-${i}`;
+        const wrap = document.createElement("label");
+        wrap.className = "opt";
+        wrap.setAttribute("for", id);
+
+        const input = document.createElement("input");
+        input.type = "radio"; input.name = "opt"; input.id = id; input.value = i;
+        input.checked = (userAnswers[idx] === i);
+
+        const span = document.createElement("span");
+        span.textContent = opt;
+
+        wrap.appendChild(input);
+        wrap.appendChild(span);
+        form.appendChild(wrap);
+      });
+
+      nextBtn.textContent = (idx === total-1) ? "Submit" : "Next";
+    }
+
+    function onNext(){
+      const chosen = form.querySelector("input[name='opt']:checked");
+      if(!chosen){ return; }
+      userAnswers[idx] = parseInt(chosen.value,10);
+
+      if(idx < QUESTIONS.length-1){
+        idx++; renderQuestion();
+      }else{
+        showResults();
+      }
+    }
+
+    function showResults(){
+      let correct = 0;
+      const mistakes = [];
+      QUESTIONS.forEach((q,i)=>{
+        const isRight = userAnswers[i] === q.answer;
+        if(isRight) correct++;
+        else mistakes.push({
+          number: i+1,
+          question: q.q,
+          correctText: q.options[q.answer],
+          chosenText: (userAnswers[i] == null) ? "No answer" : q.options[userAnswers[i]]
+        });
+      });
+
+      document.getElementById("scoreText").textContent = `You scored ${correct} / ${QUESTIONS.length}`;
+      document.getElementById("summary").textContent = correct === QUESTIONS.length
+        ? "Perfect! You know Raiku very well."
+        : "Here are the correct answers for the ones you missed:";
+
+      const wrap = document.getElementById("correctionsWrap");
+      const list = document.getElementById("corrections");
+      list.innerHTML = "";
+      if(mistakes.length){
+        wrap.hidden = false;
+        mistakes.forEach(m=>{
+          const li = document.createElement("li");
+          li.innerHTML = `<strong>Q${m.number}:</strong> ${m.question}<br>
+            <span class="muted">Your answer:</span> ${m.chosenText}<br>
+            <span class="muted">Correct answer:</span> <strong>${m.correctText}</strong>`;
+          list.appendChild(li);
+        });
+      }else{
+        wrap.hidden = true;
+      }
+
+      go("result");
+    }
+  </script>
+</body>
+</html>
